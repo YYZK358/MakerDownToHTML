@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MakerDownToHTML</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --card-hover: #243347;
+      --accent: #4a6cf7;
+      --accent-hover: #3b5ae0;
+      --text: #f1f5f9;
+      --text-dim: #94a3b8;
+      --border: #334155;
+      --success: #22c55e;
+      --error: #ef4444;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+    }
+    h1 { font-size: 1.8em; margin-bottom: 8px; }
+    h1 .md { color: var(--accent); }
+    .subtitle { color: var(--text-dim); margin-bottom: 32px; font-size: 0.95em; }
+    .drop-zone {
+      width: 100%;
+      max-width: 560px;
+      min-height: 280px;
+      border: 2px dashed var(--border);
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      cursor: pointer;
+      transition: all 0.25s;
+      background: var(--card);
+    }
+    .drop-zone:hover { border-color: var(--accent); background: var(--card-hover); }
+    .drop-zone.dragover {
+      border-color: var(--accent);
+      background: var(--card-hover);
+      transform: scale(1.02);
+    }
+    .drop-zone .icon { font-size: 52px; margin-bottom: 16px; }
+    .drop-zone .title { font-size: 1.15em; font-weight: 600; margin-bottom: 8px; }
+    .drop-zone .hint { color: var(--text-dim); font-size: 0.9em; }
+    .drop-zone input { display: none; }
+    .file-list {
+      width: 100%;
+      max-width: 560px;
+      margin-top: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .file-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 18px;
+      transition: all 0.2s;
+    }
+    .file-item:hover { border-color: var(--accent); }
+    .file-item .name { flex: 1; font-weight: 500; word-break: break-all; }
+    .file-item .actions { display: flex; gap: 8px; align-items: center; }
+    .file-item .status {
+      font-size: 0.8em;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+    .status.pending { background: var(--border); color: var(--text-dim); }
+    .status.processing { background: #1e3a5f; color: #60a5fa; }
+    .status.done { background: #052e16; color: var(--success); }
+    .status.error { background: #450a0a; color: var(--error); }
+    .btn {
+      padding: 6px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.85em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-download {
+      background: #052e16;
+      color: var(--success);
+      border: 1px solid rgba(34,197,94,0.3);
+    }
+    .btn-download:hover { background: #0a3a1f; }
+    .btn-clear {
+      background: var(--border);
+      color: var(--text-dim);
+    }
+    .btn-clear:hover { background: #475569; color: var(--text); }
+    .footer {
+      margin-top: 32px;
+      color: var(--text-dim);
+      font-size: 0.8em;
+      text-align: center;
+      line-height: 1.8;
+    }
+    .footer .tip { color: var(--text-dim); }
+    .footer .tip strong { color: var(--text); font-weight: 600; }
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 20px;
+      font-size: 0.9em;
+      max-width: 360px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.3s;
+      z-index: 999;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.success { border-color: var(--success); }
+    .toast.error { border-color: var(--error); }
+  </style>
+</head>
+<body>
+  <h1>📄 Maker<span class="md">Down</span> → HTML</h1>
+  <p class="subtitle">拖入 Markdown 文件，自动生成带侧边栏目录的 HTML</p>
+
+  <div class="drop-zone" id="dropZone">
+    <div class="icon">📥</div>
+    <div class="title">拖入 Markdown 文件到此处</div>
+    <div class="hint">或点击选择文件 · 支持 .md / .markdown · 自动开始转换</div>
+    <input type="file" id="fileInput" accept=".md,.markdown" multiple>
+  </div>
+
+  <div class="file-list" id="fileList"></div>
+
+  <div class="footer">
+    <div class="tip">💡 将下载的 <strong>.html</strong> 文件放在原 <strong>.md</strong> 文件同目录下即可</div>
+    <div class="tip">生成的 HTML 包含根据文档标题自动生成的侧边栏目录</div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const fileList = document.getElementById('fileList');
+    const toast = document.getElementById('toast');
+
+    let files = [];
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => {
+      handleFiles(e.target.files);
+      fileInput.value = '';
+    });
+
+    ['dragover', 'dragenter'].forEach(evt => {
+      dropZone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+      });
+    });
+    ['dragleave', 'drop'].forEach(evt => {
+      dropZone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        if (evt === 'drop') {
+          handleFiles(e.dataTransfer.files);
+        }
+        dropZone.classList.remove('dragover');
+      });
+    });
+    dropZone.addEventListener('drop', (e) => e.preventDefault());
+
+    function handleFiles(fileListObj) {
+      let valid = [];
+      for (const f of fileListObj) {
+        if (!/\.md|markdown$/i.test(f.name)) {
+          showToast(`跳过非 Markdown 文件：${f.name}`, 'error');
+          continue;
+        }
+        valid.push(f);
+      }
+      if (!valid.length) return;
+
+      for (const f of valid) {
+        files.push({
+          file: f,
+          id: Date.now() + Math.random(),
+          status: 'pending',
+          htmlFilename: null,
+          htmlBlobUrl: null,
+          error: null,
+        });
+      }
+      renderList();
+      convertAll();
+    }
+
+    function renderList() {
+      fileList.innerHTML = '';
+      files.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'file-item';
+        div.dataset.id = item.id;
+
+        const name = document.createElement('span');
+        name.className = 'name';
+        name.textContent = item.file.name;
+
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+
+        const status = document.createElement('span');
+        status.className = `status ${item.status}`;
+        if (item.status === 'pending') {
+          status.textContent = '待转换';
+        } else if (item.status === 'processing') {
+          status.textContent = '转换中...';
+        } else if (item.status === 'done') {
+          status.textContent = '✓ 已生成';
+        } else if (item.status === 'error') {
+          status.textContent = `失败: ${item.error || '未知错误'}`;
+        }
+        actions.appendChild(status);
+
+        // Download button for done files
+        if (item.status === 'done' && item.htmlBlobUrl) {
+          const dl = document.createElement('a');
+          dl.className = 'btn btn-download';
+          dl.href = item.htmlBlobUrl;
+          dl.download = item.htmlFilename;
+          dl.textContent = '⬇ 下载 ' + item.htmlFilename;
+          actions.appendChild(dl);
+        }
+
+        div.appendChild(name);
+        div.appendChild(actions);
+        fileList.appendChild(div);
+      });
+
+      // Global clear button
+      if (files.length > 0) {
+        let clearBtn = document.getElementById('btnClear');
+        if (!clearBtn) {
+          clearBtn = document.createElement('button');
+          clearBtn.className = 'btn btn-clear';
+          clearBtn.id = 'btnClear';
+          clearBtn.textContent = '清空列表';
+          clearBtn.addEventListener('click', () => {
+            files.forEach(f => { if (f.htmlBlobUrl) URL.revokeObjectURL(f.htmlBlobUrl); });
+            files = [];
+            renderList();
+          });
+          fileList.appendChild(clearBtn);
+        }
+      } else {
+        const btn = document.getElementById('btnClear');
+        if (btn) btn.remove();
+      }
+    }
+
+    async function convertAll() {
+      const pending = files.filter(f => f.status === 'pending');
+      for (const item of pending) {
+        item.status = 'processing';
+        renderList();
+        try {
+          const formData = new FormData();
+          formData.append('file', item.file);
+
+          const resp = await fetch('/convert', { method: 'POST', body: formData });
+          const data = await resp.json();
+
+          if (!resp.ok || !data.success) {
+            throw new Error(data.error || `HTTP ${resp.status}`);
+          }
+
+          item.htmlFilename = data.htmlFilename;
+          item.status = 'done';
+          item.htmlBlobUrl = URL.createObjectURL(new Blob([data.html], { type: 'text/html' }));
+        } catch (err) {
+          item.status = 'error';
+          item.error = err.message;
+        }
+        renderList();
+      }
+
+      const done = files.filter(f => f.status === 'done').length;
+      if (done > 0) showToast(`✅ ${done} 个文件转换完成，请下载到原 .md 文件同目录`, 'success');
+      else showToast('转换失败，请重试', 'error');
+    }
+
+    function showToast(msg, type) {
+      toast.textContent = msg;
+      toast.className = `toast show ${type}`;
+      setTimeout(() => toast.classList.remove('show'), 5000);
+    }
+  </script>
+</body>
+</html>
